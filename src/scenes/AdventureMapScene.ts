@@ -1,6 +1,6 @@
 // AdventureMapScene.ts v1.1.0
 import Phaser from 'phaser'
-import type { Tile, TileType, ResourceNode, HeroData, HexCoord, Resources } from '../config/types'
+import type { Tile, TileType, ResourceNode, HeroData, HexCoord, Resources, CityType, ICity } from '../config/types'
 import { hexToPixel } from '../config/types'
 import { MapGenerator }   from '../core/map/MapGenerator'
 import { RoadGenerator }  from '../core/map/RoadGenerator'
@@ -156,7 +156,7 @@ export class AdventureMapScene extends Phaser.Scene {
         if (visibility === 'visible') continue
         const { x, y } = hexToPixel(col, row, HEX_SIZE)
         const pts = this.hexPoints(x + HEX_SIZE, y + HEX_SIZE)
-        const alpha = visibility === 'hidden' ? 1.0 : 0.55
+        const alpha = visibility === 'hidden' ? 0.5 : 0.25
         this.fogGraphics.fillStyle(0x000000, alpha)
         this.fogGraphics.fillPoints(pts, true)
       }
@@ -166,14 +166,21 @@ export class AdventureMapScene extends Phaser.Scene {
   private drawResources() {
     this.resourceGraphics.clear()
     for (const res of this.resourceNodes) {
-      if (res.collected) continue
       const tile = this.map[res.row]?.[res.col]
       if (!tile || tile.visibility === 'hidden') continue
+
       const { x, y } = hexToPixel(res.col, res.row, HEX_SIZE)
-      const alpha = tile.visibility === 'explored' ? 0.4 : 1.0
-      this.resourceGraphics.fillStyle(RESOURCE_COLORS[res.type], alpha)
+      let alpha = tile.visibility === 'explored' ? 0.4 : 1.0
+      let color = RESOURCE_COLORS[res.type]
+
+      if (res.collected) {
+        color = 0x555555 // Cinza para indicar que foi coletado
+        alpha = 0.3
+      }
+
+      this.resourceGraphics.fillStyle(color, alpha)
       this.resourceGraphics.fillCircle(x + HEX_SIZE, y + HEX_SIZE, 10)
-      this.resourceGraphics.lineStyle(2, 0xffffff, alpha * 0.8)
+      this.resourceGraphics.lineStyle(2, 0xffffff, alpha * 0.5)
       this.resourceGraphics.strokeCircle(x + HEX_SIZE, y + HEX_SIZE, 10)
     }
   }
@@ -539,14 +546,20 @@ export class AdventureMapScene extends Phaser.Scene {
 
   private buildResources(): ResourceNode[] {
     return [
+      // Gold
       { col: 3,  row: 2,  type: 'gold', amount: 500, collected: false },
       { col: 8,  row: 5,  type: 'gold', amount: 300, collected: false },
+      { col: 16, row: 5,  type: 'gold', amount: 400, collected: false },
+      // Wood
+      { col: 2,  row: 4,  type: 'wood', amount: 15,  collected: false },
       { col: 14, row: 3,  type: 'wood', amount: 10,  collected: false },
       { col: 2,  row: 9,  type: 'wood', amount: 8,   collected: false },
+      { col: 9,  row: 11, type: 'wood', amount: 12,  collected: false },
+      // Ore
+      { col: 5,  row: 1,  type: 'ore',  amount: 10,  collected: false },
       { col: 12, row: 6,  type: 'ore',  amount: 5,   collected: false },
       { col: 7,  row: 10, type: 'ore',  amount: 7,   collected: false },
-      { col: 16, row: 5,  type: 'gold', amount: 400, collected: false },
-      { col: 9,  row: 11, type: 'wood', amount: 12,  collected: false },
+      { col: 15, row: 9,  type: 'ore',  amount: 10,  collected: false },
     ]
   }
 }

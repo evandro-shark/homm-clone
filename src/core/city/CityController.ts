@@ -1,5 +1,5 @@
 // CityController.ts v1.0.0
-import { ICity, CityType, Resources } from '../../config/types'
+import type { ICity, CityType, Resources } from '../../config/types'
 
 export interface ICityController {
   cities: ICity[]
