@@ -35,6 +35,18 @@ export interface HeroData {
   resources: Resources
 }
 
+export type CityType = 'castle' | 'rampart' | 'tower'
+
+export interface ICity {
+  id:       string
+  name:     string
+  type:     CityType
+  col:      number
+  row:      number
+  owner:    'player' | 'enemy' | 'neutral'
+  buildings: string[] // Futuro: interface IBuilding[]
+}
+
 export interface HexCoord {
   col: number
   row: number

@@ -5,6 +5,7 @@ export const MODULE_VERSIONS = {
   pathfinder:       '1.0.0',
   roadGenerator:    '1.0.0',
   heroController:   '1.0.0',
+  cityController:   '1.0.0',
   regionGenerator:  '1.0.0',
   regionPathfinder: '1.0.0',
   adventureScene:   '1.1.0',

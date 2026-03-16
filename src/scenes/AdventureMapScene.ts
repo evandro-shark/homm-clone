@@ -7,6 +7,7 @@ import { RoadGenerator }  from '../core/map/RoadGenerator'
 import { FogOfWar }       from '../core/map/FogOfWar'
 import { Pathfinder }     from '../core/map/Pathfinder'
 import { HeroController } from '../core/hero/HeroController'
+import { CityController } from '../core/city/CityController'
 
 const HEX_SIZE  = 40
 const MAP_COLS  = 18
@@ -45,6 +46,7 @@ export class AdventureMapScene extends Phaser.Scene {
   private fog       = new FogOfWar()
   private pathfinder = new Pathfinder()
   private heroCtrl  = new HeroController()
+  private cityCtrl  = new CityController()
 
   // --- state ---
   private map:           Tile[][] = []
@@ -54,6 +56,7 @@ export class AdventureMapScene extends Phaser.Scene {
 
   // --- graphics ---
   private mapGraphics!:       Phaser.GameObjects.Graphics
+  private cityGraphics!:      Phaser.GameObjects.Graphics
   private resourceGraphics!:  Phaser.GameObjects.Graphics
   private fogGraphics!:       Phaser.GameObjects.Graphics
   private highlightGraphics!: Phaser.GameObjects.Graphics
@@ -80,11 +83,13 @@ export class AdventureMapScene extends Phaser.Scene {
     }
 
     this.mapGraphics       = this.add.graphics()
+    this.cityGraphics      = this.add.graphics().setDepth(4)
     this.resourceGraphics  = this.add.graphics().setDepth(5)
     this.highlightGraphics = this.add.graphics().setDepth(8)
     this.fogGraphics       = this.add.graphics().setDepth(15)
 
     this.drawMap()
+    this.drawCities()
     this.drawResources()
     this.drawHero()
     this.createHUD()
@@ -110,6 +115,36 @@ export class AdventureMapScene extends Phaser.Scene {
         this.mapGraphics.lineStyle(1, 0x000000, 0.2)
         this.mapGraphics.strokePoints(pts, true)
       }
+    }
+  }
+
+  private drawCities() {
+    this.cityGraphics.clear()
+    for (const city of this.cityCtrl.cities) {
+      const tile = this.map[city.row][city.col]
+      if (tile.visibility === 'hidden') continue
+
+      const { x, y } = hexToPixel(city.col, city.row, HEX_SIZE)
+      const alpha = tile.visibility === 'explored' ? 0.4 : 1.0
+
+      // Desenha um "castelo" simples
+      this.cityGraphics.fillStyle(0xdddddd, alpha)
+      this.cityGraphics.fillRect(x + HEX_SIZE - 15, y + HEX_SIZE - 15, 30, 30)
+      this.cityGraphics.fillStyle(0x888888, alpha)
+      this.cityGraphics.fillRect(x + HEX_SIZE - 20, y + HEX_SIZE + 5, 40, 10)
+      this.cityGraphics.fillStyle(0xcc0000, alpha)
+      this.cityGraphics.fillTriangle(
+        x + HEX_SIZE - 15, y + HEX_SIZE - 15,
+        x + HEX_SIZE + 15, y + HEX_SIZE - 15,
+        x + HEX_SIZE,      y + HEX_SIZE - 30
+      )
+
+      // Nome da cidade
+      const name = this.add.text(x + HEX_SIZE, y + HEX_SIZE + 25, city.name, {
+        fontSize: '10px', color: '#ffffff', fontFamily: 'monospace',
+        backgroundColor: '#000000aa'
+      }).setOrigin(0.5).setDepth(6)
+      if (tile.visibility === 'explored') name.setAlpha(0.4)
     }
   }
 
@@ -210,7 +245,7 @@ export class AdventureMapScene extends Phaser.Scene {
 
     // hints
     this.add.text(cam.width - 10, hudY + 30,
-      '[Q/W/E/A/S/D] mover   [SPACE] turno   [Mouse] clicar', {
+      '[Q/W/E/A/S/D] mover   [B] Fundar   [SPACE] turno   [Mouse] clicar', {
         fontSize: '11px', color: '#555555', fontFamily: 'monospace',
       }).setOrigin(1, 0).setDepth(31)
 
@@ -252,6 +287,7 @@ export class AdventureMapScene extends Phaser.Scene {
     this.input.keyboard!.on('keydown', (e: KeyboardEvent) => {
       if (this.isMoving) return
       if (e.key === ' ') { this.endTurn(); return }
+      if (e.key.toLowerCase() === 'b') { this.tryFoundCity(); return }
 
       // mapeia tecla → vizinho pelo índice da direção hex
       const keyMap: Record<string, number> = {
@@ -276,6 +312,56 @@ export class AdventureMapScene extends Phaser.Scene {
       const tile = this.map[target.row][target.col]
       if (!tile.walkable) return
       this.executeMove(target, tile.moveCost)
+    })
+  }
+
+  private tryFoundCity() {
+    const { col, row, resources } = this.hero
+    const tile = this.map[row][col]
+
+    // 1. Verificar se é terreno de grama (conforme diretriz)
+    if (tile.type !== 'grass') {
+      this.showMessage('Cidades só podem ser fundadas na grama!')
+      return
+    }
+
+    // 2. Verificar se há recursos no local
+    const hasResource = this.resourceNodes.some(r => r.col === col && r.row === row && !r.collected)
+    if (hasResource) {
+      this.showMessage('Local ocupado por recursos!')
+      return
+    }
+
+    // 3. Verificar lógica do controller (recursos e espaço)
+    const check = this.cityCtrl.canFoundCity(col, row, resources)
+    if (!check.can) {
+      this.showMessage(check.reason || 'Não é possível fundar cidade aqui.')
+      return
+    }
+
+    // 4. Fundar a cidade!
+    const cost = this.cityCtrl.getFoundCost()
+    this.hero.resources.wood -= cost.wood
+    this.hero.resources.ore -= cost.ore
+
+    const city = this.cityCtrl.foundCity('Nova Capital', 'castle', col, row, 'player')
+    if (city) {
+      this.drawCities()
+      this.updateHUD()
+      this.showMessage('Cidade fundada com sucesso!', '#44ff44')
+    }
+  }
+
+  private showMessage(txt: string, color: string = '#ff4444') {
+    const cam = this.cameras.main
+    const msg = this.add.text(cam.width / 2, cam.height / 2, txt, {
+      fontSize: '20px', color, fontFamily: 'monospace',
+      stroke: '#000000', strokeThickness: 4,
+    }).setOrigin(0.5).setDepth(100).setScrollFactor(0)
+
+    this.tweens.add({
+      targets: msg, y: msg.y - 50, alpha: 0, duration: 2000,
+      onComplete: () => msg.destroy()
     })
   }
 
